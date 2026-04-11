@@ -392,13 +392,31 @@ export async function buildUniqueFileId(context, fileName, fileType = 'applicati
 
     const fileExt = resolveFileExt(fileName, fileType);
 
-    const nameType = url.searchParams.get('uploadNameType') || 'default';
+    let nameType = url.searchParams.get('uploadNameType') || 'default';
     const uploadFolder = url.searchParams.get('uploadFolder') || '';
     // 对上传路径进行安全处理
     const normalizedFolder = sanitizeUploadFolder(uploadFolder);
 
     // 处理文件名，移除特殊字符
     fileName = sanitizeFileName(fileName);
+
+    // 如果 nameType 是 default，读取系统配置的默认命名方式
+    if (nameType === 'default') {
+        try {
+            const { fetchPageConfig } = await import('../utils/sysConfig.js');
+            const pageConfig = await fetchPageConfig(env);
+            const config = pageConfig.config || [];
+            const nameTypeConfig = config.find(item => item.id === 'defaultUploadNameType');
+            if (nameTypeConfig && nameTypeConfig.value) {
+                // 如果配置值不是 default，则使用配置值
+                if (nameTypeConfig.value !== 'default') {
+                    nameType = nameTypeConfig.value;
+                }
+            }
+        } catch (e) {
+            console.error('Failed to fetch default naming config:', e);
+        }
+    }
 
     const unique_index = Date.now() + Math.floor(Math.random() * 10000);
     let baseId = '';
@@ -449,6 +467,7 @@ export async function buildUniqueFileId(context, fileName, fileType = 'applicati
             }
         }
     } else {
+        // 其他情况（包括原来的 default）使用时间戳+文件名
         baseId = normalizedFolder ? `${normalizedFolder}/${unique_index}_${fileName}` : `${unique_index}_${fileName}`;
     }
 
