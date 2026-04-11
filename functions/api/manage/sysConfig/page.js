@@ -186,6 +186,7 @@ export async function getPageConfig(db, env) {
                 { label: '仅前缀', value: 'index', label_en: 'Prefix Only' },
                 { label: '仅原名', value: 'origin', label_en: 'Original Name' },
                 { label: '短链接', value: 'short', label_en: 'Short Link' },
+                { label: '自动递增', value: 'autoIncrement', label_en: 'Auto Increment' },
             ],
             placeholder: 'default',
             category: '客户端设置',

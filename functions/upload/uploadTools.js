@@ -417,6 +417,37 @@ export async function buildUniqueFileId(context, fileName, fileType = 'applicati
                 return testFullId;
             }
         }
+    } else if (nameType === 'autoIncrement') {
+        // 自动递增命名方式：从1开始递增
+        const counterKey = 'manage@autoIncrementCounter';
+        let counter = 1;
+        try {
+            const counterValue = await db.get(counterKey);
+            if (counterValue) {
+                counter = parseInt(counterValue, 10) + 1;
+            }
+        } catch (e) {
+            counter = 1;
+        }
+
+        // 找到未被使用的编号
+        while (true) {
+            const testId = normalizedFolder ? `${normalizedFolder}/${counter}.${fileExt}` : `${counter}.${fileExt}`;
+            if (await db.get(testId) === null) {
+                // 保存当前计数器值
+                try {
+                    await db.put(counterKey, counter.toString());
+                } catch (e) {
+                    console.error('Failed to save auto increment counter:', e);
+                }
+                return testId;
+            }
+            counter++;
+            // 防止无限循环
+            if (counter > 1000000) {
+                throw new Error('无法生成唯一的自动递增文件ID');
+            }
+        }
     } else {
         baseId = normalizedFolder ? `${normalizedFolder}/${unique_index}_${fileName}` : `${unique_index}_${fileName}`;
     }
