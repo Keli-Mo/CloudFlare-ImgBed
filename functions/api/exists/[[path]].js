@@ -116,48 +116,27 @@ export async function onRequest(context) {
  * @returns {Promise<boolean>}
  */
 async function checkFileExists(env, fileId, channel) {
-    // R2 存储
+    console.log(`[Exists API] 检查文件: ${fileId}, channel: ${channel}`);
+
+    // R2 存储 - 直接检查 R2
     if (channel === 'CloudflareR2' || channel === 'R2') {
+        console.log(`[Exists API] 使用 R2 检查`);
         return await checkR2Exists(env, fileId);
     }
 
-    // S3 存储
-    if (channel === 'S3') {
-        // S3 检查比较复杂，暂时返回 true（依赖数据库记录）
-        return true;
-    }
-
-    // Discord 存储
-    if (channel === 'Discord') {
-        // Discord 文件URL会过期，难以检查，暂时返回 true
-        return true;
-    }
-
-    // HuggingFace 存储
-    if (channel === 'HuggingFace') {
-        // 暂不检查
-        return true;
-    }
-
-    // 外部链接
-    if (channel === 'External') {
-        return true;
-    }
-
-    // Telegram/Telegraph 存储
-    if (channel === 'Telegram' || channel === 'TelegramNew' || !channel) {
-        // Telegram 文件通过 TG API 获取，难以直接检查，暂时返回 true
-        return true;
-    }
-
-    // 未知渠道，尝试检查 R2（可能 channel 字段缺失）
-    if (env.img_r2) {
+    // 未知渠道或 channel 为空，尝试检查 R2（可能 channel 字段缺失）
+    // 这是关键修复：如果配置了 R2，优先用 R2 检查
+    if (env.img_r2 && typeof env.img_r2.head === 'function') {
+        console.log(`[Exists API] channel 未知(${channel})，尝试 R2 检查`);
         const r2Exists = await checkR2Exists(env, fileId);
-        if (r2Exists) return true;
+        console.log(`[Exists API] R2 检查结果: ${r2Exists}`);
+        return r2Exists;
     }
 
-    // 默认返回 true（依赖数据库记录）
-    return true;
+    // 其他渠道（S3/Discord/HuggingFace/External/Telegram等）
+    // 这些渠道难以直接检查，返回 false 让前端尝试加载，失败时再移除
+    console.log(`[Exists API] 未配置 R2，无法检查，返回 false`);
+    return false;
 }
 
 /**
