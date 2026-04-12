@@ -10,7 +10,7 @@ const corsHeaders = {
 
 /**
  * 检查文件是否存在的 API
- * 只检查数据库中是否有记录，不返回文件内容
+ * 同时检查数据库记录和 R2 存储中的实际文件
  * 支持 CORS，可以被外部站点调用
  */
 export async function onRequest(context) {
@@ -49,11 +49,11 @@ export async function onRequest(context) {
     }
 
     try {
-        // 从数据库中检查文件记录是否存在
+        // 1. 从数据库中检查文件记录是否存在
         const db = getDatabase(env);
         const imgRecord = await db.getWithMetadata(fileId);
 
-        // 文件不存在
+        // 数据库中无记录
         if (!imgRecord) {
             return new Response(JSON.stringify({ exists: false }), {
                 status: 404,
@@ -61,12 +61,38 @@ export async function onRequest(context) {
             });
         }
 
+        // 2. 如果是 R2 存储，实际检查 R2 中的文件是否存在
+        const channel = imgRecord.metadata?.Channel;
+        if (channel === 'CloudflareR2' || channel === 'R2') {
+            // 检查 R2 配置
+            if (env.img_r2 && typeof env.img_r2.head === 'function') {
+                try {
+                    // 使用 head 方法检查文件是否存在（不下载内容）
+                    const r2Object = await env.img_r2.head(fileId);
+                    if (!r2Object) {
+                        // R2 中文件不存在
+                        return new Response(JSON.stringify({ exists: false, error: 'File not found in R2' }), {
+                            status: 404,
+                            headers: { "Content-Type": "application/json", ...corsHeaders }
+                        });
+                    }
+                } catch (r2Error) {
+                    console.error('R2 check error:', r2Error);
+                    // R2 检查失败，返回不存在
+                    return new Response(JSON.stringify({ exists: false, error: 'R2 check failed' }), {
+                        status: 404,
+                        headers: { "Content-Type": "application/json", ...corsHeaders }
+                    });
+                }
+            }
+        }
+
         // 文件存在，返回基本信息
         const response = {
             exists: true,
             fileName: imgRecord.metadata?.FileName || fileId,
             fileType: imgRecord.metadata?.FileType || null,
-            channel: imgRecord.metadata?.Channel || null,
+            channel: channel || null,
             timestamp: imgRecord.metadata?.TimeStamp || null,
         };
 
